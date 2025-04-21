@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Use a theme that extends AppCompat -->
+    <style name="Theme.Final_demo" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- You can customize further with other attributes if needed -->
+    </style>
+
+</resources>
