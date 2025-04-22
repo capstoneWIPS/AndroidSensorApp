@@ -2,11 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Add necessary permissions -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
+
 
     <application
         android:allowBackup="true"
@@ -19,7 +20,6 @@
         android:theme="@style/Theme.Final_demo"
         tools:targetApi="31">
 
-        <!-- Make MainActivity2 the launcher -->
         <activity
             android:name=".MainActivity2"
             android:exported="true">
@@ -29,7 +29,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Keep MainActivity but remove launcher intent and label -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
