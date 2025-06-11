@@ -11,10 +11,14 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.widget.Button
+import android.widget.EditText
 import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
@@ -25,8 +29,11 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import java.io.OutputStream
-import java.net.Socket
+import java.io.File
+import java.io.FileWriter
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.*
 
 class MainActivity2 : AppCompatActivity(), SensorEventListener {
     private lateinit var mSensorManager: SensorManager
@@ -36,23 +43,33 @@ class MainActivity2 : AppCompatActivity(), SensorEventListener {
     private var mrotation: Sensor? = null
 
     private var resume = true
-    private var socket: Socket? = null
-    private var outputStream: OutputStream? = null
 
     private lateinit var wifiManager: WifiManager
     private lateinit var tableLayout: TableLayout
+    private lateinit var roomNameEditText: EditText
+    private lateinit var saveButton: Button
+
     private val PERMISSION_REQUEST_CODE = 100
 
     private val handler = Handler(Looper.getMainLooper())
     private val scanInterval = 300L // 5 seconds between scans
     private var isScanning = false
+    private var latestScanResults: List<android.net.wifi.ScanResult> = emptyList()
 
-    private val REQUIRED_PERMISSIONS = arrayOf(
-        Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.ACCESS_COARSE_LOCATION,
-        Manifest.permission.ACCESS_WIFI_STATE,
-        Manifest.permission.CHANGE_WIFI_STATE
-    )
+    // Updated permissions based on Android version
+    private val REQUIRED_PERMISSIONS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.NEARBY_WIFI_DEVICES
+        )
+    } else {
+        arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_WIFI_STATE,
+            Manifest.permission.CHANGE_WIFI_STATE
+        )
+    }
 
     private val scanRunnable = object : Runnable {
         override fun run() {
@@ -74,25 +91,6 @@ class MainActivity2 : AppCompatActivity(), SensorEventListener {
         }
     }
 
-//    private fun sendDataToServer(pitch: Float, roll: Float, yaw: Float) {
-//        Thread {
-//            try {
-//                // Ensure socket and outputStream are initialized before attempting to send data
-////                socket?.let { socket ->
-////                    outputStream?.let { outputStream ->
-////                        val data = "$pitch,$roll,$yaw"
-////                        outputStream.write(data.toByteArray())
-////                        outputStream.flush()
-////                    }
-////                }
-//            } catch (e: Exception) {
-//                runOnUiThread {
-//                    Toast.makeText(applicationContext, "Error sending data", Toast.LENGTH_SHORT).show()
-//                }
-//            }
-//        }.start()
-//    }
-
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         return
     }
@@ -100,28 +98,24 @@ class MainActivity2 : AppCompatActivity(), SensorEventListener {
     override fun onSensorChanged(event: SensorEvent?) {
         if (event != null && resume) {
             if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-                findViewById<TextView>(R.id.textView12).text = event.values[0].toString()
-                findViewById<TextView>(R.id.textView17).text = event.values[1].toString()
-                findViewById<TextView>(R.id.textView16).text = event.values[2].toString()
+                findViewById<TextView>(R.id.textView12).text = String.format("%.2f", event.values[0])
+                findViewById<TextView>(R.id.textView17).text = String.format("%.2f", event.values[1])
+                findViewById<TextView>(R.id.textView16).text = String.format("%.2f", event.values[2])
             }
             if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
-                findViewById<TextView>(R.id.textView18).text = event.values[0].toString()
-                findViewById<TextView>(R.id.textView14).text = event.values[1].toString()
-                findViewById<TextView>(R.id.textView19).text = event.values[2].toString()
+                findViewById<TextView>(R.id.textView18).text = String.format("%.2f", event.values[0])
+                findViewById<TextView>(R.id.textView14).text = String.format("%.2f", event.values[1])
+                findViewById<TextView>(R.id.textView19).text = String.format("%.2f", event.values[2])
             }
             if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
-                findViewById<TextView>(R.id.textView21).text = event.values[0].toString()
-                findViewById<TextView>(R.id.textView22).text = event.values[1].toString()
-                findViewById<TextView>(R.id.textView23).text = event.values[2].toString()
+                findViewById<TextView>(R.id.textView21).text = String.format("%.2f", event.values[0])
+                findViewById<TextView>(R.id.textView22).text = String.format("%.2f", event.values[1])
+                findViewById<TextView>(R.id.textView23).text = String.format("%.2f", event.values[2])
             }
             if (event.sensor.type == Sensor.TYPE_ORIENTATION) {
-                findViewById<TextView>(R.id.textView3).text = event.values[0].toString()
-                findViewById<TextView>(R.id.textView6).text = event.values[1].toString()
-                findViewById<TextView>(R.id.textView8).text = event.values[2].toString()
-                val pitch = event.values[1]  // Y axis (pitch)
-                val roll = event.values[2]   // Z axis (roll)
-                val yaw = event.values[0]    // X axis (yaw)
-//                sendDataToServer(pitch, roll, yaw)
+                findViewById<TextView>(R.id.textView3).text = String.format("%.2f", event.values[0])
+                findViewById<TextView>(R.id.textView6).text = String.format("%.2f", event.values[1])
+                findViewById<TextView>(R.id.textView8).text = String.format("%.2f", event.values[2])
             }
         }
     }
@@ -164,28 +158,111 @@ class MainActivity2 : AppCompatActivity(), SensorEventListener {
         }
 
         wifiManager = getSystemService(WIFI_SERVICE) as WifiManager
-
         tableLayout = findViewById(R.id.wifiTable)
 
-//        Thread {
-//            try {
-//                socket = Socket("192.168.0.115", 12345)  // Replace with the IP address of the Python server
-//                outputStream = socket?.getOutputStream()
-//            } catch (e: Exception) {
-//                runOnUiThread {
-//                    Toast.makeText(applicationContext, "Error connecting to server", Toast.LENGTH_SHORT).show()
-//                }
-//            }
-//        }.start()
+        // Initialize new UI elements
+        roomNameEditText = findViewById(R.id.statusTextView) // This should be EditText in layout
+        saveButton = findViewById(R.id.actionButton)
+
+        // Set up button click listener
+        saveButton.setOnClickListener {
+            saveRoomData()
+        }
 
         mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         mGyroscope = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
         mMagneticfield = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
-        mrotation = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION) // note this is deprecated
+        mrotation = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION)
 
         if (checkAndRequestPermissions()) {
             startContinuousScanning()
+        }
+    }
+
+    private fun saveRoomData() {
+        val roomName = roomNameEditText.text.toString().trim()
+
+        if (roomName.isEmpty()) {
+            Toast.makeText(this, "Please enter a room name", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (latestScanResults.isEmpty()) {
+            Toast.makeText(this, "No WiFi networks found. Please wait for scan to complete.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Find the strongest signal (highest RSSI value)
+        val strongestNetwork = latestScanResults.maxByOrNull { it.level }
+
+        if (strongestNetwork != null) {
+            val bssid = strongestNetwork.BSSID
+            val rssi = strongestNetwork.level
+            val ssid = if (strongestNetwork.SSID.isNotEmpty()) strongestNetwork.SSID else "Hidden Network"
+
+            // Save to CSV
+            if (saveToCsv(roomName, bssid, rssi, ssid)) {
+                val csvFile = getCsvFile()
+                Toast.makeText(this, "Room data saved to: ${csvFile.absolutePath}", Toast.LENGTH_LONG).show()
+                roomNameEditText.setText("") // Clear the input
+            } else {
+                Toast.makeText(this, "Failed to save room data", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(this, "No valid network data available", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun saveToCsv(roomName: String, bssid: String, rssi: Int, ssid: String): Boolean {
+        return try {
+            val csvFile = getCsvFile()
+            val fileExists = csvFile.exists()
+
+            // Ensure parent directory exists
+            csvFile.parentFile?.mkdirs()
+
+            FileWriter(csvFile, true).use { writer ->
+                // Write header if file is new
+                if (!fileExists) {
+                    writer.append("Room Name,BSSID,RSSI,SSID,Timestamp\n")
+                }
+
+                // Write data row
+                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+                writer.append("\"$roomName\",\"$bssid\",$rssi,\"$ssid\",\"$timestamp\"\n")
+                writer.flush()
+            }
+
+            // Log the file path for debugging
+            android.util.Log.d("CSV_SAVE", "File saved to: ${csvFile.absolutePath}")
+            true
+        } catch (e: IOException) {
+            e.printStackTrace()
+            android.util.Log.e("CSV_SAVE", "Error saving file: ${e.message}")
+            false
+        }
+    }
+
+    private fun getCsvFile(): File {
+        // Try multiple locations based on Android version
+        return when {
+            // For Android 10+ (API 29+) - Use public Downloads directory (most accessible)
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                // This saves to Downloads folder which is easily accessible
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                File(downloadsDir, "room_bssid_rssi.csv")
+            }
+            // For older versions - Use external storage if available
+            Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED -> {
+                val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+                File(documentsDir, "room_bssid_rssi.csv")
+            }
+            // Fallback to app's external files directory
+            else -> {
+                val appDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
+                File(appDir, "room_bssid_rssi.csv")
+            }
         }
     }
 
@@ -204,6 +281,13 @@ class MainActivity2 : AppCompatActivity(), SensorEventListener {
         for (permission in REQUIRED_PERMISSIONS) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(permission)
+            }
+        }
+
+        // Add storage permission for older Android versions
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             }
         }
 
@@ -227,7 +311,6 @@ class MainActivity2 : AppCompatActivity(), SensorEventListener {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                // All permissions have been granted
                 startContinuousScanning()
             } else {
                 Toast.makeText(
@@ -256,6 +339,12 @@ class MainActivity2 : AppCompatActivity(), SensorEventListener {
 
     private fun startWifiScan() {
         try {
+            // Check if WiFi is enabled
+            if (!wifiManager.isWifiEnabled) {
+                Toast.makeText(this, "WiFi is disabled. Please enable WiFi to scan.", Toast.LENGTH_LONG).show()
+                return
+            }
+
             val success = wifiManager.startScan()
             if (!success) {
                 scanFailure()
@@ -271,59 +360,64 @@ class MainActivity2 : AppCompatActivity(), SensorEventListener {
     }
 
     private fun scanSuccess() {
-        val results = wifiManager.scanResults
+        try {
+            val results = wifiManager.scanResults
+            latestScanResults = results // Store the latest results
 
-        val statusText = findViewById<TextView>(R.id.textView)
-        val currentTime = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-        statusText.text = "Last scan: $currentTime"
+            val statusText = findViewById<TextView>(R.id.textView)
+            val currentTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+            statusText.text = "Last scan: $currentTime"
 
-        tableLayout.removeAllViews()
+            tableLayout.removeAllViews()
 
-        val headerRow = TableRow(this)
-        headerRow.setBackgroundResource(android.R.color.darker_gray)
+            val headerRow = TableRow(this)
+            headerRow.setBackgroundResource(android.R.color.darker_gray)
 
-        val ssidHeader = TextView(this)
-        ssidHeader.text = "SSID"
-        ssidHeader.setPadding(16, 8, 16, 8)
-        ssidHeader.setTextColor(resources.getColor(android.R.color.white, null))
-        ssidHeader.setTypeface(null, android.graphics.Typeface.BOLD)
+            val ssidHeader = TextView(this)
+            ssidHeader.text = "SSID"
+            ssidHeader.setPadding(16, 8, 16, 8)
+            ssidHeader.setTextColor(resources.getColor(android.R.color.white, null))
+            ssidHeader.setTypeface(null, android.graphics.Typeface.BOLD)
 
-        val rssiHeader = TextView(this)
-        rssiHeader.text = "RSSI (dBm)"
-        rssiHeader.setPadding(16, 8, 16, 8)
-        rssiHeader.setTextColor(resources.getColor(android.R.color.white, null))
-        rssiHeader.setTypeface(null, android.graphics.Typeface.BOLD)
+            val rssiHeader = TextView(this)
+            rssiHeader.text = "RSSI (dBm)"
+            rssiHeader.setPadding(16, 8, 16, 8)
+            rssiHeader.setTextColor(resources.getColor(android.R.color.white, null))
+            rssiHeader.setTypeface(null, android.graphics.Typeface.BOLD)
 
-        headerRow.addView(ssidHeader)
-        headerRow.addView(rssiHeader)
-        tableLayout.addView(headerRow)
+            headerRow.addView(ssidHeader)
+            headerRow.addView(rssiHeader)
+            tableLayout.addView(headerRow)
 
-        val sortedResults = results.sortedByDescending { it.level }
+            val sortedResults = results.sortedByDescending { it.level }
 
-        for (result in sortedResults) {
-            val row = TableRow(this)
+            for (result in sortedResults) {
+                val row = TableRow(this)
 
-            val ssidText = TextView(this)
-            ssidText.text = if (result.SSID.isNotEmpty()) result.SSID else "(Hidden Network)"
-            ssidText.setPadding(16, 12, 16, 12)
+                val ssidText = TextView(this)
+                ssidText.text = if (result.SSID.isNotEmpty()) result.SSID else "(Hidden Network)"
+                ssidText.setPadding(16, 12, 16, 12)
 
-            val rssiText = TextView(this)
-            rssiText.text = "${result.level} dBm"
-            rssiText.setPadding(16, 12, 16, 12)
-            rssiText.gravity = Gravity.END
+                val rssiText = TextView(this)
+                rssiText.text = "${result.level} dBm"
+                rssiText.setPadding(16, 12, 16, 12)
+                rssiText.gravity = Gravity.END
 
-            row.addView(ssidText)
-            row.addView(rssiText)
-            tableLayout.addView(row)
-        }
+                row.addView(ssidText)
+                row.addView(rssiText)
+                tableLayout.addView(row)
+            }
 
-        if (results.isEmpty()) {
-            val row = TableRow(this)
-            val noNetworksText = TextView(this)
-            noNetworksText.text = "No WiFi networks found"
-            noNetworksText.setPadding(16, 12, 16, 12)
-            row.addView(noNetworksText)
-            tableLayout.addView(row)
+            if (results.isEmpty()) {
+                val row = TableRow(this)
+                val noNetworksText = TextView(this)
+                noNetworksText.text = "No WiFi networks found"
+                noNetworksText.setPadding(16, 12, 16, 12)
+                row.addView(noNetworksText)
+                tableLayout.addView(row)
+            }
+        } catch (e: SecurityException) {
+            Toast.makeText(this, "Security exception during scan: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
