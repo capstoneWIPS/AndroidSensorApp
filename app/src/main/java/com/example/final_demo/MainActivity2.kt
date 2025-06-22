@@ -1,6 +1,7 @@
 package com.example.final_demo
 
 import android.Manifest
+import com.google.android.material.button.MaterialButton
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -29,6 +30,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.io.File
 import java.io.FileWriter
 import java.io.IOException
@@ -36,6 +38,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity2 : AppCompatActivity(), SensorEventListener {
+    private lateinit var fabMap: FloatingActionButton
     private lateinit var mSensorManager: SensorManager
     private var mAccelerometer: Sensor? = null
     private var mGyroscope: Sensor? = null
@@ -151,24 +154,27 @@ class MainActivity2 : AppCompatActivity(), SensorEventListener {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
 
+        // Initialize all views including fabMap
         wifiManager = getSystemService(WIFI_SERVICE) as WifiManager
         tableLayout = findViewById(R.id.wifiTable)
-
-        // Initialize new UI elements
-        roomNameEditText = findViewById(R.id.statusTextView) // This should be EditText in layout
+        roomNameEditText = findViewById(R.id.statusTextView)
         saveButton = findViewById(R.id.actionButton)
+        fabMap = findViewById(R.id.fabMap)
 
-        // Set up button click listener
+        fabMap.setOnClickListener {
+            navigateToMap()
+        }
+
+        findViewById<MaterialButton>(R.id.btnSwitchToMap).setOnClickListener {
+            navigateToMap()
+        }
+
         saveButton.setOnClickListener {
             saveRoomData()
         }
 
+        // Sensor setup
         mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         mGyroscope = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
@@ -178,6 +184,12 @@ class MainActivity2 : AppCompatActivity(), SensorEventListener {
         if (checkAndRequestPermissions()) {
             startContinuousScanning()
         }
+    }
+
+    private fun navigateToMap() {
+        val intent = Intent(this, MapActivity::class.java)
+        startActivity(intent)
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
     }
 
     private fun saveRoomData() {
