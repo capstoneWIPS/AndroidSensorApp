@@ -30,7 +30,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="500dp"
         android:background="#00FF00"
         app:cardCornerRadius="12dp"
         app:cardElevation="4dp"
@@ -81,13 +81,17 @@
         app:srcCompat="@android:drawable/ic_menu_compass"
         app:tint="?attr/colorOnPrimary" />
 
-    <ImageView
+
+    <io.getstream.photoview.PhotoView
         android:id="@+id/mapImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:adjustViewBounds="true"
         android:scaleType="fitCenter"
-        app:srcCompat="@drawable/floor_0" />
+        android:scrollbarSize="8dp"
+        app:srcCompat="@drawable/f_0_updatd" />
+
+
 
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

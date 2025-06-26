@@ -13,6 +13,8 @@ import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import android.view.MotionEvent
+import io.getstream.photoview.PhotoView
 
 class MapActivity : AppCompatActivity() {
 
@@ -21,13 +23,13 @@ class MapActivity : AppCompatActivity() {
     private lateinit var fabSensors: FloatingActionButton
 
     private val floorPlans: Map<String, Int> = mapOf(
-        "Ground Floor" to R.drawable.floor_0,
-        "Floor 1" to R.drawable.floor_1,
-        "Floor 2" to R.drawable.floor_2,
-        "Floor 3" to R.drawable.floor_3,
-        "Floor 4" to R.drawable.floor_4,
-        "Floor 5" to R.drawable.floor_5,
-        "Floor 6" to R.drawable.floor_6
+        "Ground Floor" to R.drawable.f_0_updatd,
+        "Floor 1" to R.drawable.f_1_updatd,
+        "Floor 2" to R.drawable.f_2_updatd,
+        "Floor 3" to R.drawable.f_3_updated,
+        "Floor 4" to R.drawable.f_4_updatd,
+        "Floor 5" to R.drawable.f_5_updatd,
+        "Floor 6" to R.drawable.f_6_updatd
     )
 
     private var currentFloor = "Ground Floor"
@@ -45,9 +47,18 @@ class MapActivity : AppCompatActivity() {
         initializeViews()
         setupFloorSelector()
         setupFab()
-
         // Load initial floor
         loadFloorPlan(currentFloor)
+        val myImageView: PhotoView = findViewById(R.id.mapImageView)
+        myImageView.setOnPhotoTapListener { view, x, y ->
+            // x and y are relative (0.0 to 1.0) — normalized coordinates
+            val bitmapX = (x * view!!.drawable.intrinsicWidth).toInt()
+            val bitmapY = (y * view.drawable.intrinsicHeight).toInt()
+
+            Toast.makeText(this, "Tapped at image coords: X=$bitmapX, Y=$bitmapY", Toast.LENGTH_SHORT).show()
+        }
+
+
     }
 
     private fun initializeViews() {
