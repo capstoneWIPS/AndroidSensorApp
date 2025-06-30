@@ -91,7 +91,14 @@
         android:scrollbarSize="8dp"
         app:srcCompat="@drawable/f_0_updatd" />
 
+    <Button
+        android:id="@+id/button3"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|left"
+        android:layout_margin="16dp"
 
+        android:text="Add point to \downloads\\floor_no.json" />
 
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
