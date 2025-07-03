@@ -55,7 +55,7 @@ class MainActivity2 : AppCompatActivity(), SensorEventListener {
     private val PERMISSION_REQUEST_CODE = 100
 
     private val handler = Handler(Looper.getMainLooper())
-    private val scanInterval = 300L // 5 seconds between scans
+    private val scanInterval = 500L // 5 seconds between scans
     private var isScanning = false
     private var latestScanResults: List<android.net.wifi.ScanResult> = emptyList()
 

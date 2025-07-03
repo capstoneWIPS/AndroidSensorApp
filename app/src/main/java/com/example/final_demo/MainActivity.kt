@@ -11,6 +11,8 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -32,6 +34,7 @@ import java.io.FileWriter
 import java.text.SimpleDateFormat
 import java.util.*
 import android.util.Log
+import android.widget.TextView
 
 class MapActivity : AppCompatActivity() {
 
@@ -43,11 +46,22 @@ class MapActivity : AppCompatActivity() {
     private var bitmapX = 0
     private var bitmapY = 0
     private var scanIndex = 0
-    private var latestScanResults: List<ScanResult> = emptyList()
     private var isScanning = false
+    private val handler = Handler(Looper.getMainLooper())
+    private val scanInterval = 500L // 5 seconds between scans
+    private var latestScanResults: List<android.net.wifi.ScanResult> = emptyList()
 
     // Data structure to store all scan data
     private val outermostmap = mutableMapOf<Int, MutableMap<String, Any?>>()
+
+    private val scanRunnable = object : Runnable {
+        override fun run() {
+            if (isScanning) {
+                startWifiScan()
+                handler.postDelayed(this, scanInterval)
+            }
+        }
+    }
 
     private val wifiScanReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -60,7 +74,6 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-    private val intentFilter = IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
 
     private val REQUIRED_PERMISSIONS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         arrayOf(
@@ -76,7 +89,8 @@ class MapActivity : AppCompatActivity() {
         )
     }
 
-    private val PERMISSION_REQUEST_CODE = 1001
+
+    private val PERMISSION_REQUEST_CODE = 100
 
     private val floorPlans: Map<String, Int> = mapOf(
         "Ground Floor" to R.drawable.f_0_updatd,
@@ -90,7 +104,28 @@ class MapActivity : AppCompatActivity() {
 
     private var currentFloor = "Ground Floor"
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onResume() {
+        super.onResume()
+        val intentFilter = IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
+        registerReceiver(wifiScanReceiver, intentFilter)
+
+        if (checkIfPermissionsGranted()) {
+            startContinuousScanning()
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        try {
+            unregisterReceiver(wifiScanReceiver)
+        } catch (e: IllegalArgumentException) {
+            // Receiver was not registered, ignore
+        }
+
+        stopContinuousScanning()
+    }
+
+        override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_map)
 
@@ -110,12 +145,18 @@ class MapActivity : AppCompatActivity() {
         loadFloorPlan(currentFloor)
         saveButtonVar = findViewById(R.id.button3) //savejson button
 
+            if (checkAndRequestPermissions()) {
+                startContinuousScanning()
+            }
+
         saveButtonVar.setOnClickListener {
             if (bitmapX == 0 && bitmapY == 0) {
                 Toast.makeText(this, "Please tap on the map first to set position", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            performWifiScanAndSave()
+            //performWifiScanAndSave()
+            processScanResults()
+            saveRoomDataJson()
         }
 
         mapImageView.setOnPhotoTapListener { view, x, y ->
@@ -137,6 +178,7 @@ class MapActivity : AppCompatActivity() {
         wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
     }
 
+
     private fun checkPermissions() {
         val missingPermissions = REQUIRED_PERMISSIONS.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
@@ -147,15 +189,113 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+
+    private fun checkIfPermissionsGranted(): Boolean {
+        for (permission in REQUIRED_PERMISSIONS) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                return false
+            }
+        }
+        return true
+    }
+
+    private fun checkAndRequestPermissions(): Boolean {
+        val permissionsToRequest = ArrayList<String>()
+
+        for (permission in REQUIRED_PERMISSIONS) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(permission)
+            }
+        }
+
+        // Add storage permission for older Android versions
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            ActivityCompat.requestPermissions(
+                this,
+                permissionsToRequest.toTypedArray(),
+                PERMISSION_REQUEST_CODE
+            )
+            return false
+        }
+
+        return true
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            val allGranted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
-            if (!allGranted) {
-                Toast.makeText(this, "Permissions required for WiFi scanning", Toast.LENGTH_LONG).show()
+            if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                startContinuousScanning()
+            } else {
+                Toast.makeText(
+                    this,
+                    "Permission denied. Cannot scan WiFi networks without required permissions.",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }
+
+    private fun startContinuousScanning() {
+        if (!isScanning) {
+            isScanning = true
+
+
+            handler.post(scanRunnable)
+        }
+    }
+
+    private fun stopContinuousScanning() {
+        isScanning = false
+        handler.removeCallbacks(scanRunnable)
+    }
+
+    private fun startWifiScan() {
+        try {
+            // Check if WiFi is enabled
+            if (!wifiManager.isWifiEnabled) {
+                Toast.makeText(this, "WiFi is disabled. Please enable WiFi to scan.", Toast.LENGTH_LONG).show()
+                return
+            }
+
+            val success = wifiManager.startScan()
+            if (!success) {
+                scanFailure()
+            }
+        } catch (e: SecurityException) {
+            Toast.makeText(
+                this,
+                "Permission denied: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
+            stopContinuousScanning()
+        }
+    }
+
+    private fun scanSuccess() {
+        try {
+            val results = wifiManager.scanResults
+            latestScanResults = results // Store the latest results
+} catch (e: SecurityException) {
+    Toast.makeText(this, "Security exception during scan: ${e.message}", Toast.LENGTH_LONG).show()
+}
+}
+
+private fun scanFailure() {
+    Toast.makeText(this, "WiFi scan failed. Will try again.", Toast.LENGTH_SHORT).show()
+}
+
+
 
     private fun setupFloorSelector() {
         floorPlans.keys.forEachIndexed { index, floorName ->
@@ -203,66 +343,10 @@ class MapActivity : AppCompatActivity() {
         mapImageView.adjustViewBounds = true
     }
 
-    private fun performWifiScanAndSave() {
-        if (isScanning) {
-            Toast.makeText(this, "Scan already in progress", Toast.LENGTH_SHORT).show()
-            return
-        }
 
-        if (!hasRequiredPermissions()) {
-            Toast.makeText(this, "Missing required permissions", Toast.LENGTH_SHORT).show()
-            return
-        }
 
-        isScanning = true
-        Toast.makeText(this, "Starting WiFi scan...", Toast.LENGTH_SHORT).show()
 
-        // Register receiver
-        registerReceiver(wifiScanReceiver, intentFilter)
 
-        // Start scan
-        val success = wifiManager.startScan()
-        if (!success) {
-            scanFailure()
-        }
-    }
-
-    private fun hasRequiredPermissions(): Boolean {
-        return REQUIRED_PERMISSIONS.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    private fun scanSuccess() {
-        try {
-            latestScanResults = wifiManager.scanResults
-            Toast.makeText(this, "Scan completed. Found ${latestScanResults.size} networks", Toast.LENGTH_SHORT).show()
-
-            // Process and save scan results
-            processScanResults()
-            saveRoomDataJson()
-
-        } catch (e: SecurityException) {
-            Toast.makeText(this, "Permission denied for WiFi scan", Toast.LENGTH_SHORT).show()
-        } finally {
-            isScanning = false
-            try {
-                unregisterReceiver(wifiScanReceiver)
-            } catch (e: IllegalArgumentException) {
-                // Receiver was not registered
-            }
-        }
-    }
-
-    private fun scanFailure() {
-        Toast.makeText(this, "WiFi scan failed", Toast.LENGTH_SHORT).show()
-        isScanning = false
-        try {
-            unregisterReceiver(wifiScanReceiver)
-        } catch (e: IllegalArgumentException) {
-            // Receiver was not registered
-        }
-    }
 
     private fun processScanResults() {
         val positionk = mutableMapOf<String, Int>()
