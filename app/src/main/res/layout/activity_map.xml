@@ -23,17 +23,27 @@
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- Floor Selector Card -->
+    <!-- Map Container - This should be behind other elements -->
+    <com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+        android:id="@+id/mapImageView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#EEEEEE"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        app:panEnabled="true"
+        app:zoomEnabled="true"
+        app:quickScaleEnabled="true" />
+
+    <!-- Floor Selector Card - This should be on top of the map -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/floorSelectorCard"
         style="@style/Widget.Material3.CardView.Elevated"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="500dp"
-        android:background="#00FF00"
+        android:layout_marginTop="16dp"
         app:cardCornerRadius="12dp"
-        app:cardElevation="4dp"
+        app:cardElevation="8dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <LinearLayout
@@ -68,7 +78,14 @@
 
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Map Container -->
+    <!-- Save Data Button -->
+    <Button
+        android:id="@+id/button3"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_margin="16dp"
+        android:text="Add point to \nDownloads\\floor_no.json" />
 
     <!-- Floating Action Button to go back to sensors -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -80,25 +97,5 @@
         android:contentDescription="Go to Sensors"
         app:srcCompat="@android:drawable/ic_menu_compass"
         app:tint="?attr/colorOnPrimary" />
-
-
-    <io.getstream.photoview.PhotoView
-        android:id="@+id/mapImageView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:adjustViewBounds="true"
-        android:scaleType="fitCenter"
-        android:scrollbarSize="8dp"
-        app:srcCompat="@drawable/f_0_updatd" />
-
-    <Button
-        android:id="@+id/button3"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|left"
-        android:layout_margin="16dp"
-
-        android:text="Add point to \downloads\\floor_no.json" />
-
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

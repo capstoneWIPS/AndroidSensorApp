@@ -6,16 +6,16 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import android.view.View
-import android.widget.FrameLayout
-import android.widget.ImageView
+import android.util.Log
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.widget.Button
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -25,30 +25,28 @@ import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import android.view.MotionEvent
-import android.widget.Button
-import io.getstream.photoview.PhotoView
 import org.json.JSONObject
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
 import java.util.*
-import android.util.Log
-import android.widget.TextView
+import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import com.davemorrissey.labs.subscaleview.ImageSource
 
 class MapActivity : AppCompatActivity() {
 
-    private lateinit var mapImageView: PhotoView
+    private lateinit var mapImageView: SubsamplingScaleImageView
     private lateinit var floorChipGroup: ChipGroup
     private lateinit var fabSensors: FloatingActionButton
     private lateinit var saveButtonVar: Button
     private lateinit var wifiManager: WifiManager
+    private lateinit var gestureDetector: GestureDetector
     private var bitmapX = 0
     private var bitmapY = 0
     private var scanIndex = 0
     private var isScanning = false
     private val handler = Handler(Looper.getMainLooper())
-    private val scanInterval = 500L // 5 seconds between scans
+    private val scanInterval = 500L // 0.5 seconds between scans
     private var latestScanResults: List<android.net.wifi.ScanResult> = emptyList()
 
     // Data structure to store all scan data
@@ -74,7 +72,6 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-
     private val REQUIRED_PERMISSIONS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -89,17 +86,16 @@ class MapActivity : AppCompatActivity() {
         )
     }
 
-
     private val PERMISSION_REQUEST_CODE = 100
 
     private val floorPlans: Map<String, Int> = mapOf(
-        "Ground Floor" to R.drawable.f_0_updatd,
-        "Floor 1" to R.drawable.f_1_updatd,
-        "Floor 2" to R.drawable.f_2_updatd,
-        "Floor 3" to R.drawable.f_3_updated,
-        "Floor 4" to R.drawable.f_4_updatd,
-        "Floor 5" to R.drawable.f_5_updatd,
-        "Floor 6" to R.drawable.f_6_updatd
+        "Ground Floor" to R.drawable.ground_floor,
+        "Floor 1" to R.drawable.first_floor,
+        "Floor 2" to R.drawable.second_floor,
+        "Floor 3" to R.drawable.third_floor,
+        "Floor 4" to R.drawable.fourth_floor,
+        "Floor 5" to R.drawable.fifth_floor,
+        "Floor 6" to R.drawable.sixth_floor
     )
 
     private var currentFloor = "Ground Floor"
@@ -125,7 +121,7 @@ class MapActivity : AppCompatActivity() {
         stopContinuousScanning()
     }
 
-        override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_map)
 
@@ -140,31 +136,23 @@ class MapActivity : AppCompatActivity() {
         setupFloorSelector()
         setupFab()
         checkPermissions()
+        setupMapInteraction()
 
         // Load initial floor
         loadFloorPlan(currentFloor)
         saveButtonVar = findViewById(R.id.button3) //savejson button
 
-            if (checkAndRequestPermissions()) {
-                startContinuousScanning()
-            }
+        if (checkAndRequestPermissions()) {
+            startContinuousScanning()
+        }
 
         saveButtonVar.setOnClickListener {
             if (bitmapX == 0 && bitmapY == 0) {
                 Toast.makeText(this, "Please tap on the map first to set position", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            //performWifiScanAndSave()
             processScanResults()
             saveRoomDataJson()
-        }
-
-        mapImageView.setOnPhotoTapListener { view, x, y ->
-            // x and y are relative (0.0 to 1.0) — normalized coordinates
-            bitmapX = (x * view!!.drawable.intrinsicWidth).toInt()
-            bitmapY = (y * view.drawable.intrinsicHeight).toInt()
-
-            Toast.makeText(this, "Tapped at image coords: X=$bitmapX, Y=$bitmapY", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -178,6 +166,35 @@ class MapActivity : AppCompatActivity() {
         wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
     }
 
+    private fun setupMapInteraction() {
+        // Create gesture detector for single tap detection
+        gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                // Convert screen coordinates to image coordinates
+                val point = mapImageView.viewToSourceCoord(e.x, e.y)
+                if (point != null) {
+                    bitmapX = point.x.toInt()
+                    bitmapY = point.y.toInt()
+                    Toast.makeText(this@MapActivity, "Tapped at: X=$bitmapX, Y=$bitmapY", Toast.LENGTH_SHORT).show()
+                }
+                return true
+            }
+        })
+
+        // Set up touch listener that allows both pan/zoom and tap detection
+        mapImageView.setOnTouchListener { v, event ->
+            // Let the gesture detector handle single taps
+            val handled = gestureDetector.onTouchEvent(event)
+
+            // If not handled by gesture detector, let the SubsamplingScaleImageView handle it
+            // This allows pan and zoom to work normally
+            if (!handled) {
+                false // Return false to let SubsamplingScaleImageView handle the touch
+            } else {
+                true
+            }
+        }
+    }
 
     private fun checkPermissions() {
         val missingPermissions = REQUIRED_PERMISSIONS.filter {
@@ -188,7 +205,6 @@ class MapActivity : AppCompatActivity() {
             ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), PERMISSION_REQUEST_CODE)
         }
     }
-
 
     private fun checkIfPermissionsGranted(): Boolean {
         for (permission in REQUIRED_PERMISSIONS) {
@@ -249,8 +265,6 @@ class MapActivity : AppCompatActivity() {
     private fun startContinuousScanning() {
         if (!isScanning) {
             isScanning = true
-
-
             handler.post(scanRunnable)
         }
     }
@@ -286,16 +300,14 @@ class MapActivity : AppCompatActivity() {
         try {
             val results = wifiManager.scanResults
             latestScanResults = results // Store the latest results
-} catch (e: SecurityException) {
-    Toast.makeText(this, "Security exception during scan: ${e.message}", Toast.LENGTH_LONG).show()
-}
-}
+        } catch (e: SecurityException) {
+            Toast.makeText(this, "Security exception during scan: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
 
-private fun scanFailure() {
-    Toast.makeText(this, "WiFi scan failed. Will try again.", Toast.LENGTH_SHORT).show()
-}
-
-
+    private fun scanFailure() {
+        Toast.makeText(this, "WiFi scan failed. Will try again.", Toast.LENGTH_SHORT).show()
+    }
 
     private fun setupFloorSelector() {
         floorPlans.keys.forEachIndexed { index, floorName ->
@@ -338,15 +350,26 @@ private fun scanFailure() {
             return
         }
 
-        mapImageView.setImageResource(resourceId)
-        mapImageView.scaleType = ImageView.ScaleType.FIT_CENTER
-        mapImageView.adjustViewBounds = true
+        try {
+            mapImageView.setImage(ImageSource.resource(resourceId))
+
+            // Configure the scale settings
+            mapImageView.setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE)
+            mapImageView.setMaxScale(10.0f)
+            mapImageView.setMinScale(0.1f)
+            mapImageView.setDoubleTapZoomScale(2.0f)
+            mapImageView.setDoubleTapZoomDpi(160)
+
+            // Enable gestures
+            mapImageView.setPanEnabled(true)
+            mapImageView.setZoomEnabled(true)
+            mapImageView.setQuickScaleEnabled(true)
+
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error loading floor plan: ${e.message}", Toast.LENGTH_LONG).show()
+            Log.e("MapActivity", "Error loading floor plan", e)
+        }
     }
-
-
-
-
-
 
     private fun processScanResults() {
         val positionk = mutableMapOf<String, Int>()

@@ -62,4 +62,6 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(libs.photoview)
+    implementation("com.davemorrissey.labs:subsampling-scale-image-view:3.10.0")
+
 }
