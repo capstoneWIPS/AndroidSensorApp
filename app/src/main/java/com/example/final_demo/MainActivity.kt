@@ -202,9 +202,12 @@ class MapActivity : AppCompatActivity() {
                     // Show position update with red marker
                     Log.e("MapActivity", "brr before drawmarkeronapp function")
                     //drawMarkerOnMap()
-                    ogdrawMarkerOnMap()
-                    Log.e("MapActivity", "brr after drawmarkeronapp function")
+                    //ogdrawMarkerOnMap()
                     Toast.makeText(this@MapActivity, "Tapped at: X=$bitmapX, Y=$bitmapY", Toast.LENGTH_SHORT).show()
+
+                    processScanResults()
+                    saveRoomDataJson()
+                    Log.e("MapActivity", "brr after drawmarkeronapp function")
                 }
                 return true
             }
@@ -251,41 +254,17 @@ class MapActivity : AppCompatActivity() {
 
     }
 
-    private fun ogdrawMarkerOnMap() {
-        val originalBitmap: Bitmap = when {
-            modifiedFloorPlans.containsKey(currentFloor) -> {
-                modifiedFloorPlans[currentFloor]!!.copy(Bitmap.Config.ARGB_8888, true)
-            }
-            else -> {
-                val resBitmap = BitmapFactory.decodeResource(
-                    resources,
-                    floorPlans[currentFloor] ?: R.drawable.ground_floor
-                )
-                resBitmap.copy(Bitmap.Config.ARGB_8888, true)
-            }
-        }
 
-        val canvas = Canvas(originalBitmap)
-        canvas.drawCircle(bitmapX.toFloat(), bitmapY.toFloat(), markerRadius, paint)
-
-        baseBitmap = originalBitmap
-        //modifiedFloorPlans[currentFloor] = baseBitmap
-
-
-// ✅ Safe to use for image view
-        mapImageView.setImage(ImageSource.bitmap(baseBitmap))
-
-    }
 
 
 
 
     // NEW: Helper function to get current floor image (modified or original)
-    private fun getCurrentFloorImage(): ImageSource {
-        return if (modifiedFloorPlans.containsKey(currentFloor)) {
-            ImageSource.bitmap(modifiedFloorPlans[currentFloor]!!)
+    private fun getCurrentFloorImage(floorName: String): ImageSource {
+        return if (modifiedFloorPlans.containsKey(floorName)) {
+            ImageSource.bitmap(modifiedFloorPlans[floorName]!!)
         } else {
-            ImageSource.resource(floorPlans[currentFloor] ?: R.drawable.ground_floor)
+            ImageSource.resource(floorPlans[floorName] ?: R.drawable.ground_floor)
         }
     }
 
@@ -446,17 +425,9 @@ class MapActivity : AppCompatActivity() {
     private fun loadFloorPlan(floorName: String) {
         try {
             // MODIFIED: Use the helper function to get the appropriate image source
-            val imageSource = if (modifiedFloorPlans.containsKey(floorName)) {
-                ImageSource.bitmap(modifiedFloorPlans[currentFloor]!!)
-            } else {
-                val resourceId = floorPlans[floorName] ?: run {
-                    Toast.makeText(this, "Floor plan not available", Toast.LENGTH_SHORT).show()
-                    return
-                }
-                ImageSource.resource(resourceId)
-            }
 
-            mapImageView.setImage(imageSource)
+            mapImageView.setImage(getCurrentFloorImage(floorName))
+
 
             // Configure the scale settings
             mapImageView.setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE)
@@ -488,8 +459,8 @@ class MapActivity : AppCompatActivity() {
         positionk["y"] = bitmapY
 
         // MODIFIED: Ensure the marker is stored in the modified bitmap when saving
-             // This will create and store the modified bitmap
-            drawMarkerOnMap()
+        // This will create and store the modified bitmap
+        drawMarkerOnMap()
 
 
 
