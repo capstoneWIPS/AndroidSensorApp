@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
@@ -32,6 +34,9 @@ import java.text.SimpleDateFormat
 import java.util.*
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.davemorrissey.labs.subscaleview.ImageSource
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 
 class MapActivity : AppCompatActivity() {
 
@@ -51,6 +56,24 @@ class MapActivity : AppCompatActivity() {
 
     // Data structure to store all scan data
     private val outermostmap = mutableMapOf<Int, MutableMap<String, Any?>>()
+
+    // NEW: Separate storage for modified bitmaps with markers
+    private var modifiedFloorPlans = mutableMapOf<String, Bitmap>()
+    private var baseBitmap: Bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+
+    private var baseBitmap2: Bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+
+
+    val paint = Paint().apply {
+        color = Color.RED
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+
+
+    val markerRadius = 50f // Slightly larger for better visibility
+    var canvas = Canvas(baseBitmap)
+
 
     private val scanRunnable = object : Runnable {
         override fun run() {
@@ -88,7 +111,7 @@ class MapActivity : AppCompatActivity() {
 
     private val PERMISSION_REQUEST_CODE = 100
 
-    private val floorPlans: Map<String, Int> = mapOf(
+    private val floorPlans: MutableMap<String, Int> = mutableMapOf(
         "Ground Floor" to R.drawable.ground_floor,
         "Floor 1" to R.drawable.first_floor,
         "Floor 2" to R.drawable.second_floor,
@@ -175,6 +198,11 @@ class MapActivity : AppCompatActivity() {
                 if (point != null) {
                     bitmapX = point.x.toInt()
                     bitmapY = point.y.toInt()
+
+                    // Show position update with red marker
+                    Log.e("MapActivity", "brr before drawmarkeronapp function")
+                    drawMarkerOnMap()
+                    Log.e("MapActivity", "brr after drawmarkeronapp function")
                     Toast.makeText(this@MapActivity, "Tapped at: X=$bitmapX, Y=$bitmapY", Toast.LENGTH_SHORT).show()
                 }
                 return true
@@ -194,6 +222,65 @@ class MapActivity : AppCompatActivity() {
                 true
             }
         }
+    }
+
+
+    private fun drawMarkerOnMap() {
+        try {
+            // Check if we already have a modified version of this floor
+
+            if (modifiedFloorPlans.containsKey(currentFloor)) {
+                if (modifiedFloorPlans[currentFloor] != null) {
+                    baseBitmap = modifiedFloorPlans[currentFloor]!!
+                } else {
+                    Log.e("MapActivity", "brr null Error updating map with marker")
+                    Toast.makeText(this, "br null error", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                 baseBitmap2=BitmapFactory.decodeResource(
+                    resources,
+                    floorPlans[currentFloor] ?: R.drawable.ground_floor
+                )
+                baseBitmap = baseBitmap2.copy(Bitmap.Config.ARGB_8888, true)
+
+            }
+
+            // Create a mutable copy
+            canvas = Canvas(baseBitmap)
+
+            // Configure paint for the marker
+
+
+            // Draw the marker
+            canvas.drawCircle(bitmapX.toFloat(), bitmapY.toFloat(), markerRadius, paint)
+
+            // Store the modified bitmap for this floor
+
+            // Update the image view with the marked bitmap
+            mapImageView.setImage(ImageSource.bitmap(baseBitmap))
+
+        } catch (e: Exception) {
+            Log.e("MapActivity", "Error updating map with marker", e)
+            Toast.makeText(this, "Error updating map: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
+
+
+    // NEW: Helper function to get current floor image (modified or original)
+    private fun getCurrentFloorImage(): ImageSource {
+        return if (modifiedFloorPlans.containsKey(currentFloor)) {
+            ImageSource.bitmap(modifiedFloorPlans[currentFloor]!!)
+        } else {
+            ImageSource.resource(floorPlans[currentFloor] ?: R.drawable.ground_floor)
+        }
+    }
+
+    // NEW: Function to clear markers from current floor
+    private fun clearMarkersFromCurrentFloor() {
+        modifiedFloorPlans.remove(currentFloor)
+        loadFloorPlan(currentFloor) // Reload original
     }
 
     private fun checkPermissions() {
@@ -345,13 +432,19 @@ class MapActivity : AppCompatActivity() {
     }
 
     private fun loadFloorPlan(floorName: String) {
-        val resourceId = floorPlans[floorName] ?: run {
-            Toast.makeText(this, "Floor plan not available", Toast.LENGTH_SHORT).show()
-            return
-        }
-
         try {
-            mapImageView.setImage(ImageSource.resource(resourceId))
+            // MODIFIED: Use the helper function to get the appropriate image source
+            val imageSource = if (modifiedFloorPlans.containsKey(floorName)) {
+                ImageSource.bitmap(modifiedFloorPlans[floorName]!!)
+            } else {
+                val resourceId = floorPlans[floorName] ?: run {
+                    Toast.makeText(this, "Floor plan not available", Toast.LENGTH_SHORT).show()
+                    return
+                }
+                ImageSource.resource(resourceId)
+            }
+
+            mapImageView.setImage(imageSource)
 
             // Configure the scale settings
             mapImageView.setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE)
@@ -381,6 +474,13 @@ class MapActivity : AppCompatActivity() {
         // Set position values
         positionk["x"] = bitmapX
         positionk["y"] = bitmapY
+
+        // MODIFIED: Ensure the marker is stored in the modified bitmap when saving
+             // This will create and store the modified bitmap
+            drawMarkerOnMap()
+            modifiedFloorPlans[currentFloor] = baseBitmap
+
+
 
         // Process scan results
         for (result in latestScanResults) {
@@ -450,7 +550,7 @@ class MapActivity : AppCompatActivity() {
             jsonObject.put("scans", scansArray)
 
             // Save to file
-            val fileName = "${currentFloor}.json"
+            val fileName = "${currentFloor.replace(" ", "_")}_${System.currentTimeMillis()}.json"
             val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             val file = File(downloadsDir, fileName)
 
@@ -501,7 +601,7 @@ class MapActivity : AppCompatActivity() {
                 for ((ssid, bssidMap) in readings) {
                     Log.d("MapActivity", "  SSID: $ssid")
                     for ((bssid, rssi) in bssidMap) {
-                        Log.d("MapActivity", "    BSSID: $bssid, RSSI: $rssi dBm")
+                        Log.d("MapActivity", "    BSSID: $rssi dBm")
                     }
                 }
             }
