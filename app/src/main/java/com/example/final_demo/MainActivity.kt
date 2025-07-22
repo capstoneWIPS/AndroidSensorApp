@@ -201,7 +201,8 @@ class MapActivity : AppCompatActivity() {
 
                     // Show position update with red marker
                     Log.e("MapActivity", "brr before drawmarkeronapp function")
-                    drawMarkerOnMap()
+                    //drawMarkerOnMap()
+                    ogdrawMarkerOnMap()
                     Log.e("MapActivity", "brr after drawmarkeronapp function")
                     Toast.makeText(this@MapActivity, "Tapped at: X=$bitmapX, Y=$bitmapY", Toast.LENGTH_SHORT).show()
                 }
@@ -226,43 +227,59 @@ class MapActivity : AppCompatActivity() {
 
 
     private fun drawMarkerOnMap() {
-        try {
-            // Check if we already have a modified version of this floor
-
-            if (modifiedFloorPlans.containsKey(currentFloor)) {
-                if (modifiedFloorPlans[currentFloor] != null) {
-                    baseBitmap = modifiedFloorPlans[currentFloor]!!
-                } else {
-                    Log.e("MapActivity", "brr null Error updating map with marker")
-                    Toast.makeText(this, "br null error", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                 baseBitmap2=BitmapFactory.decodeResource(
+        val originalBitmap: Bitmap = when {
+            modifiedFloorPlans.containsKey(currentFloor) -> {
+                // ⚠️ Do NOT reuse the stored bitmap directly
+                modifiedFloorPlans[currentFloor]!!.copy(Bitmap.Config.ARGB_8888, true)
+            }
+            else -> {
+                val resBitmap = BitmapFactory.decodeResource(
                     resources,
                     floorPlans[currentFloor] ?: R.drawable.ground_floor
                 )
-                baseBitmap = baseBitmap2.copy(Bitmap.Config.ARGB_8888, true)
-
+                resBitmap.copy(Bitmap.Config.ARGB_8888, true)
             }
-
-            // Create a mutable copy
-            canvas = Canvas(baseBitmap)
-
-            // Configure paint for the marker
-
-
-            // Draw the marker
-            canvas.drawCircle(bitmapX.toFloat(), bitmapY.toFloat(), markerRadius, paint)
-
-            // Store the modified bitmap for this floor
-
-            // Update the image view with the marked bitmap
-            mapImageView.setImage(ImageSource.bitmap(baseBitmap))
-
-        } catch (e: Exception) {
-            Log.e("MapActivity", "Error updating map with marker", e)
-            Toast.makeText(this, "Error updating map: ${e.message}", Toast.LENGTH_SHORT).show()
         }
+
+        val canvas = Canvas(originalBitmap)
+        canvas.drawCircle(bitmapX.toFloat(), bitmapY.toFloat(), markerRadius, paint)
+
+// ✅ Safely store the new mutable bitmap
+        baseBitmap = originalBitmap
+        modifiedFloorPlans[currentFloor] = baseBitmap
+
+
+// ✅ Safe to use for image view
+        mapImageView.setImage(ImageSource.bitmap(baseBitmap))
+
+    }
+
+    private fun ogdrawMarkerOnMap() {
+        val originalBitmap: Bitmap = when {
+            modifiedFloorPlans.containsKey(currentFloor) -> {
+                // ⚠️ Do NOT reuse the stored bitmap directly
+                modifiedFloorPlans[currentFloor]!!.copy(Bitmap.Config.ARGB_8888, true)
+            }
+            else -> {
+                val resBitmap = BitmapFactory.decodeResource(
+                    resources,
+                    floorPlans[currentFloor] ?: R.drawable.ground_floor
+                )
+                resBitmap.copy(Bitmap.Config.ARGB_8888, true)
+            }
+        }
+
+        val canvas = Canvas(originalBitmap)
+        canvas.drawCircle(bitmapX.toFloat(), bitmapY.toFloat(), markerRadius, paint)
+
+// ✅ Safely store the new mutable bitmap
+        baseBitmap = originalBitmap
+        //modifiedFloorPlans[currentFloor] = baseBitmap
+
+
+// ✅ Safe to use for image view
+        mapImageView.setImage(ImageSource.bitmap(baseBitmap))
+
     }
 
 
@@ -435,7 +452,7 @@ class MapActivity : AppCompatActivity() {
         try {
             // MODIFIED: Use the helper function to get the appropriate image source
             val imageSource = if (modifiedFloorPlans.containsKey(floorName)) {
-                ImageSource.bitmap(modifiedFloorPlans[floorName]!!)
+                ImageSource.bitmap(modifiedFloorPlans[currentFloor]!!)
             } else {
                 val resourceId = floorPlans[floorName] ?: run {
                     Toast.makeText(this, "Floor plan not available", Toast.LENGTH_SHORT).show()
@@ -478,7 +495,7 @@ class MapActivity : AppCompatActivity() {
         // MODIFIED: Ensure the marker is stored in the modified bitmap when saving
              // This will create and store the modified bitmap
             drawMarkerOnMap()
-            modifiedFloorPlans[currentFloor] = baseBitmap
+
 
 
 
