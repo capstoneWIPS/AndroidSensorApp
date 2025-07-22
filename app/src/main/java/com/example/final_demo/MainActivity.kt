@@ -229,7 +229,6 @@ class MapActivity : AppCompatActivity() {
     private fun drawMarkerOnMap() {
         val originalBitmap: Bitmap = when {
             modifiedFloorPlans.containsKey(currentFloor) -> {
-                // ⚠️ Do NOT reuse the stored bitmap directly
                 modifiedFloorPlans[currentFloor]!!.copy(Bitmap.Config.ARGB_8888, true)
             }
             else -> {
@@ -244,12 +243,10 @@ class MapActivity : AppCompatActivity() {
         val canvas = Canvas(originalBitmap)
         canvas.drawCircle(bitmapX.toFloat(), bitmapY.toFloat(), markerRadius, paint)
 
-// ✅ Safely store the new mutable bitmap
         baseBitmap = originalBitmap
         modifiedFloorPlans[currentFloor] = baseBitmap
 
 
-// ✅ Safe to use for image view
         mapImageView.setImage(ImageSource.bitmap(baseBitmap))
 
     }
@@ -257,7 +254,6 @@ class MapActivity : AppCompatActivity() {
     private fun ogdrawMarkerOnMap() {
         val originalBitmap: Bitmap = when {
             modifiedFloorPlans.containsKey(currentFloor) -> {
-                // ⚠️ Do NOT reuse the stored bitmap directly
                 modifiedFloorPlans[currentFloor]!!.copy(Bitmap.Config.ARGB_8888, true)
             }
             else -> {
@@ -272,7 +268,6 @@ class MapActivity : AppCompatActivity() {
         val canvas = Canvas(originalBitmap)
         canvas.drawCircle(bitmapX.toFloat(), bitmapY.toFloat(), markerRadius, paint)
 
-// ✅ Safely store the new mutable bitmap
         baseBitmap = originalBitmap
         //modifiedFloorPlans[currentFloor] = baseBitmap
 
