@@ -85,7 +85,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|start"
         android:layout_margin="16dp"
-        android:text="Add point to \nDownloads\\floor_no.json" />
+        android:text="delete point from \nDownloads\\floor_no.json" />
 
     <!-- Floating Action Button to go back to sensors -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton

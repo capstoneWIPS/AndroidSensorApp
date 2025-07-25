@@ -37,6 +37,7 @@ import com.davemorrissey.labs.subscaleview.ImageSource
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import org.json.JSONArray
 
 class MapActivity : AppCompatActivity() {
 
@@ -56,6 +57,10 @@ class MapActivity : AppCompatActivity() {
 
     // Data structure to store all scan data
     private val outermostmap = mutableMapOf<Int, MutableMap<String, Any?>>()
+    private val outermostmap2 = mutableMapOf<String, Any?>()
+
+    private var readMap = mutableMapOf<String,MutableMap<Int, MutableMap<String, Any?>>>()
+    var scanIndexMap = mutableMapOf<String, Int>()
 
     // NEW: Separate storage for modified bitmaps with markers
     private var modifiedFloorPlans = mutableMapOf<String, Bitmap>()
@@ -99,12 +104,12 @@ class MapActivity : AppCompatActivity() {
 
     private val floorPlans: MutableMap<String, Int> = mutableMapOf(
         "Ground Floor" to R.drawable.ground_floor,
-        "Floor 1" to R.drawable.first_floor,
-        "Floor 2" to R.drawable.second_floor,
-        "Floor 3" to R.drawable.third_floor,
-        "Floor 4" to R.drawable.fourth_floor,
-        "Floor 5" to R.drawable.fifth_floor,
-        "Floor 6" to R.drawable.sixth_floor
+        "Floor One" to R.drawable.first_floor,
+        "Floor Two" to R.drawable.second_floor,
+        "Floor Three" to R.drawable.third_floor,
+        "Floor Four" to R.drawable.fourth_floor,
+        "Floor Five" to R.drawable.fifth_floor,
+        "Floor Six" to R.drawable.sixth_floor
     )
 
     private var currentFloor = "Ground Floor"
@@ -122,21 +127,84 @@ class MapActivity : AppCompatActivity() {
     lateinit var canvas:Canvas
 
     private fun initializeBitmaps() {
-        originalBitmap= when {
-            modifiedFloorPlans.containsKey(currentFloor) -> {
-                modifiedFloorPlans[currentFloor]!!.copy(Bitmap.Config.ARGB_8888, true)
+        try {
+            // Start with the original resource bitmap
+            val resBitmap = BitmapFactory.decodeResource(
+                resources,
+                floorPlans[currentFloor] ?: R.drawable.ground_floor
+            )
+            originalBitmap = resBitmap.copy(Bitmap.Config.ARGB_8888, true)
+
+            // Read JSON file and mark existing points
+            val jsonFile2 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "${currentFloor.replace(" ", "_")}.json")
+            //val jsonFile2 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "${currentFloor}.json")
+
+            val existingJson2 = if (jsonFile2.exists()) {
+                try {
+                    val existingContent2 = jsonFile2.readText()
+                    JSONObject(existingContent2)
+                } catch (e: Exception) {
+                    // If file exists but is corrupted, create new structure
+                    JSONObject()
+                }
+            } else {
+                //file.createNewFile()
+                JSONObject()
+
             }
-            else -> {
-                val resBitmap = BitmapFactory.decodeResource(
-                    resources,
-                    floorPlans[currentFloor] ?: R.drawable.ground_floor
-                )
-                resBitmap.copy(Bitmap.Config.ARGB_8888, true)
+
+            // Get or create the scans array
+            val allScansArray2 = if (existingJson2.has("all_scans")) {
+                existingJson2.getJSONArray("all_scans")
+            } else {
+                JSONArray()
+
             }
+
+            if (jsonFile2.exists()) {
+                for (i in 0 until allScansArray2.length()) {
+                    val jsonObjectnew2 = allScansArray2.getJSONObject(i)
+                    if (jsonObjectnew2.has("position")) {
+                        val position2 = jsonObjectnew2.getJSONObject("position")
+                        val x2 = position2.getInt("x")
+                        val y2 = position2.getInt("y")
+                        canvas = Canvas(originalBitmap)
+
+                        // Draw marker at saved position
+                        canvas.drawCircle(x2.toFloat(), y2.toFloat(), markerRadius, paint)
+
+                        Log.d("MapActivity", "Loaded marker at: x=$x2, y=$y2 for floor $currentFloor")
+                    } else {
+                        Log.d("MapActivity","position not found")
+                    }
+                }
+            } else {
+                Log.d("MapActivity", "No JSON file found for floor $currentFloor, using original image")
+            }
+
+
+
+
+            baseBitmap = originalBitmap
+            //this.canvas = Canvas(baseBitmap)
+            canvas=Canvas(baseBitmap)
+            // Store the bitmap with markers (if any were loaded)
+            modifiedFloorPlans[currentFloor] = baseBitmap
+
+        } catch (e: Exception) {
+            Log.e("MapActivity", "Error initializing bitmaps: ${e.message}", e)
+            Toast.makeText(this, "brr2 Error initializing bitmaps:", Toast.LENGTH_SHORT).show()
+            // Fallback to original resource
+            val resBitmap = BitmapFactory.decodeResource(
+                resources,
+                floorPlans[currentFloor] ?: R.drawable.ground_floor
+            )
+            originalBitmap = resBitmap.copy(Bitmap.Config.ARGB_8888, true)
+            baseBitmap = originalBitmap
+            this.canvas = Canvas(baseBitmap)
         }
-        baseBitmap = originalBitmap
-        canvas= Canvas(baseBitmap)
     }
+
 
 
 
@@ -178,6 +246,7 @@ class MapActivity : AppCompatActivity() {
         checkPermissions()
         setupMapInteraction()
         initializeBitmaps()
+        //loadExistingData()
 
         // Load initial floor
         loadFloorPlan(currentFloor)
@@ -187,13 +256,65 @@ class MapActivity : AppCompatActivity() {
             startContinuousScanning()
         }
 
+        //NOTE : SAVEBUTTON IS NOW DELETE BUTTON,IT DELETES THE LAST POSITION
         saveButtonVar.setOnClickListener {
-            if (bitmapX == 0 && bitmapY == 0) {
-                Toast.makeText(this, "Please tap on the map first to set position", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+
+            val jsonFile3 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "${currentFloor.replace(" ", "_")}.json")
+            if (jsonFile3.exists()){
+                val existingJson3 = if (jsonFile3.exists()) {
+                    try {
+                        val existingContent3 = jsonFile3.readText()
+                        JSONObject(existingContent3)
+                    } catch (e: Exception) {
+                        // If file exists but is corrupted, create new structure
+                        JSONObject()
+                    }
+                } else {
+                    //file.createNewFile()
+                    JSONObject()
+
+                }
+
+                try {
+
+                // Get or create the scans array
+                val allScansArray3 = if (existingJson3.has("all_scans")) {
+                    existingJson3.getJSONArray("all_scans")
+                } else {
+                    JSONArray()
+
+                }
+                    if (allScansArray3.length()>=1) {
+                        allScansArray3.remove(allScansArray3.length() - 1)
+                    } else {
+                        Toast.makeText(this, "No scans to delete", Toast.LENGTH_SHORT).show()
+                    }
+                existingJson3.put("all_scans", allScansArray3)
+                existingJson3.put("total_scan_sessions", allScansArray3.length())
+                existingJson3.put("last_updated", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
+
+                // Write the complete JSON back to file
+                FileWriter(jsonFile3, false).use { writer -> // false = overwrite, not append
+                    writer.write(existingJson3.toString(2))
+                }
+
+                   loadFloorPlan(currentFloor)
+                    //Toast.makeText(this, "Point deleted", Toast.LENGTH_LONG).show()
+
+
+                } catch (e: Exception) {
+            Toast.makeText(this, "Error saving data: ${e.message}", Toast.LENGTH_LONG).show()
+            Log.e("MapActivity", "brr Error loading floor plan ${e.message} ", e)
+
+            e.printStackTrace()
+        }
+
+
+
+            } else {
+                Toast.makeText(this, "No JSON file found for floor $currentFloor", Toast.LENGTH_SHORT).show()
             }
-            processScanResults()
-            saveRoomDataJson()
+
         }
     }
 
@@ -248,28 +369,41 @@ class MapActivity : AppCompatActivity() {
 
 
     private fun drawMarkerOnMap() {
-        originalBitmap = when {
-            modifiedFloorPlans.containsKey(currentFloor) -> {
-                modifiedFloorPlans[currentFloor]!!.copy(Bitmap.Config.ARGB_8888, true)
-            }
-            else -> {
-                val resBitmap = BitmapFactory.decodeResource(
+        try {
+            // Create a completely fresh bitmap for drawing
+            val sourceBitmap = if (modifiedFloorPlans.containsKey(currentFloor)) {
+                modifiedFloorPlans[currentFloor]!!
+            } else {
+                BitmapFactory.decodeResource(
                     resources,
                     floorPlans[currentFloor] ?: R.drawable.ground_floor
                 )
-                resBitmap.copy(Bitmap.Config.ARGB_8888, true)
             }
+
+            // Create a mutable copy
+            val newBitmap = sourceBitmap.copy(Bitmap.Config.ARGB_8888, true)
+
+            // Create a new canvas for this specific bitmap
+            val newCanvas = Canvas(newBitmap)
+
+            // Draw the marker
+            newCanvas.drawCircle(bitmapX.toFloat(), bitmapY.toFloat(), markerRadius, paint)
+
+            // Update references
+            originalBitmap = newBitmap
+            baseBitmap = newBitmap
+            canvas = newCanvas
+
+            // Store the modified bitmap
+            modifiedFloorPlans[currentFloor] = newBitmap
+
+            // Update the image view
+            mapImageView.setImage(ImageSource.bitmap(baseBitmap))
+
+        } catch (e: Exception) {
+            Log.e("MapActivity", "Error drawing marker: ${e.message}", e)
+            Toast.makeText(this, "Error drawing marker", Toast.LENGTH_SHORT).show()
         }
-
-        canvas = Canvas(originalBitmap)
-        canvas.drawCircle(bitmapX.toFloat(), bitmapY.toFloat(), markerRadius, paint)
-
-        baseBitmap = originalBitmap
-        modifiedFloorPlans[currentFloor] = baseBitmap
-
-
-        mapImageView.setImage(ImageSource.bitmap(baseBitmap))
-
     }
 
 
@@ -430,26 +564,12 @@ class MapActivity : AppCompatActivity() {
 
     private fun loadFloorPlan(floorName: String) {
         try {
-            currentFloor=floorName
+            currentFloor = floorName
+
+
             initializeBitmaps()
-            // MODIFIED: Use the helper function to get the appropriate image source
-            if (modifiedFloorPlans.containsKey(floorName)){
-                mapImageView.setImage(ImageSource.bitmap(baseBitmap))
-            } else {
-                val resourceId = floorPlans[floorName] ?: run {
-                    Toast.makeText(this, "Floor plan not available", Toast.LENGTH_SHORT).show()
-                    return
-                }
-
-                mapImageView.setImage(ImageSource.resource(resourceId))
-
-
-
-
-
-            }
-
-
+            //loadExistingData()
+            mapImageView.setImage(ImageSource.bitmap(baseBitmap))
             // Configure the scale settings
             mapImageView.setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE)
             mapImageView.setMaxScale(10.0f)
@@ -467,13 +587,32 @@ class MapActivity : AppCompatActivity() {
             Log.e("MapActivity", "Error loading floor plan", e)
         }
     }
+    private fun cleanupBitmaps() {
+        try {
+            // Clear all stored modified bitmaps to free memory
+            modifiedFloorPlans.values.forEach { bitmap ->
+                if (!bitmap.isRecycled) {
+                    bitmap.recycle()
+                }
+            }
+            modifiedFloorPlans.clear()
+
+            // Clean up current bitmaps
+            if (::originalBitmap.isInitialized && !originalBitmap.isRecycled) {
+                originalBitmap.recycle()
+            }
+            if (::baseBitmap.isInitialized && !baseBitmap.isRecycled && baseBitmap != originalBitmap) {
+                baseBitmap.recycle()
+            }
+        } catch (e: Exception) {
+            Log.e("MapActivity", "Error cleaning up bitmaps: ${e.message}")
+        }
+    }
 
     private fun processScanResults() {
         val positionk = mutableMapOf<String, Int>()
         val readingsk = mutableMapOf<String, MutableMap<String, Int>>()
 
-        // Initialize the map for this scan index
-        outermostmap[scanIndex] = mutableMapOf<String, Any?>()
 
         // Set position values
         positionk["x"] = bitmapX
@@ -497,10 +636,11 @@ class MapActivity : AppCompatActivity() {
         }
 
         // Store the data in the outermost map
-        outermostmap[scanIndex]!!["position"] = positionk
-        outermostmap[scanIndex]!!["readings"] = readingsk
-        outermostmap[scanIndex]!!["floor"] = currentFloor
-        outermostmap[scanIndex]!!["timestamp"] = System.currentTimeMillis()
+        outermostmap2["position"] = positionk
+        outermostmap2["readings"] = readingsk
+        outermostmap2["floor"] = currentFloor
+        outermostmap2["timestamp"] = System.currentTimeMillis()
+
 
         // Print to console
         printOutermostMap()
@@ -510,28 +650,52 @@ class MapActivity : AppCompatActivity() {
 
     private fun saveRoomDataJson() {
         try {
-            val jsonObject = JSONObject()
+            val fileName = "${currentFloor.replace(" ", "_")}.json"
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = File(downloadsDir, fileName)
 
-            // Add metadata
-            jsonObject.put("total_scans", outermostmap.size)
-            jsonObject.put("created_at", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
+            val existingJson = if (file.exists()) {
+                try {
+                    val existingContent = file.readText()
+                    JSONObject(existingContent)
+                } catch (e: Exception) {
+                    // If file exists but is corrupted, create new structure
+                    JSONObject()
+                }
+            } else {
+                //file.createNewFile()
+                JSONObject()
+            }
+
+            // Get or create the scans array
+            val allScansArray = if (existingJson.has("all_scans")) {
+                existingJson.getJSONArray("all_scans")
+            } else {
+                JSONArray()
+            }
+
+            // Create new scan data
+            //val newScanData = JSONObject()
+
+            // Add metadata for this scan
+
 
             // Convert outermostmap to JSON
-            val scansArray = JSONObject()
-            for ((index, scanData) in outermostmap) {
+
                 val scanJson = JSONObject()
 
                 // Add position
-                val position = scanData["position"] as? Map<String, Int>
+                val position = outermostmap2["position"] as? Map<String, Int>
                 if (position != null) {
                     val positionJson = JSONObject()
                     positionJson.put("x", position["x"])
                     positionJson.put("y", position["y"])
                     scanJson.put("position", positionJson)
+
                 }
 
                 // Add readings
-                val readings = scanData["readings"] as? Map<String, Map<String, Int>>
+                val readings = outermostmap2["readings"] as? Map<String, Map<String, Int>>
                 if (readings != null) {
                     val readingsJson = JSONObject()
                     for ((ssid, bssidMap) in readings) {
@@ -545,33 +709,42 @@ class MapActivity : AppCompatActivity() {
                 }
 
                 // Add other metadata
-                scanJson.put("floor", scanData["floor"])
-                scanJson.put("timestamp", scanData["timestamp"])
+            scanJson.put("index", allScansArray.length())
+            scanJson.put("floor", outermostmap2["floor"])
+            scanJson.put("scanned_at", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
 
-                scansArray.put(index.toString(), scanJson)
+
+
+            // Add new scan data to the array
+            //allScansArray.put(newScanData)
+            allScansArray.put(allScansArray.length(),scanJson)
+
+
+            // Update the main JSON object
+            existingJson.put("all_scans", allScansArray)
+            existingJson.put("total_scan_sessions", allScansArray.length())
+            existingJson.put("last_updated", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
+
+            // Write the complete JSON back to file
+            FileWriter(file, false).use { writer -> // false = overwrite, not append
+                writer.write(existingJson.toString(2))
             }
 
-            jsonObject.put("scans", scansArray)
 
-            // Save to file
-            val fileName = "${currentFloor.replace(" ", "_")}_${System.currentTimeMillis()}.json"
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val file = File(downloadsDir, fileName)
-
-            FileWriter(file).use { writer ->
-                writer.write(jsonObject.toString(2)) // Pretty print with indent
-            }
-
-            Toast.makeText(this, "Data saved to Downloads/$fileName", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Data appended to Downloads/$fileName (${allScansArray.length()} scan sessions)", Toast.LENGTH_LONG).show()
 
         } catch (e: Exception) {
             Toast.makeText(this, "Error saving data: ${e.message}", Toast.LENGTH_LONG).show()
+            Log.e("MapActivity", "brr Error loading floor plan ${e.message} ", e)
+
             e.printStackTrace()
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        cleanupBitmaps()
+
         try {
             if (isScanning) {
                 unregisterReceiver(wifiScanReceiver)
