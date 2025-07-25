@@ -59,20 +59,6 @@ class MapActivity : AppCompatActivity() {
 
     // NEW: Separate storage for modified bitmaps with markers
     private var modifiedFloorPlans = mutableMapOf<String, Bitmap>()
-    private var baseBitmap: Bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-
-    private var baseBitmap2: Bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-
-
-    val paint = Paint().apply {
-        color = Color.RED
-        style = Paint.Style.FILL
-        isAntiAlias = true
-    }
-
-
-    val markerRadius = 50f // Slightly larger for better visibility
-    var canvas = Canvas(baseBitmap)
 
 
     private val scanRunnable = object : Runnable {
@@ -122,6 +108,37 @@ class MapActivity : AppCompatActivity() {
     )
 
     private var currentFloor = "Ground Floor"
+    private lateinit var originalBitmap: Bitmap
+    private lateinit var baseBitmap: Bitmap
+
+    val paint = Paint().apply {
+        color = Color.RED
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+
+
+    val markerRadius = 50f // Slightly larger for better visibility
+    lateinit var canvas:Canvas
+
+    private fun initializeBitmaps() {
+        originalBitmap= when {
+            modifiedFloorPlans.containsKey(currentFloor) -> {
+                modifiedFloorPlans[currentFloor]!!.copy(Bitmap.Config.ARGB_8888, true)
+            }
+            else -> {
+                val resBitmap = BitmapFactory.decodeResource(
+                    resources,
+                    floorPlans[currentFloor] ?: R.drawable.ground_floor
+                )
+                resBitmap.copy(Bitmap.Config.ARGB_8888, true)
+            }
+        }
+        baseBitmap = originalBitmap
+        canvas= Canvas(baseBitmap)
+    }
+
+
 
     override fun onResume() {
         super.onResume()
@@ -160,6 +177,7 @@ class MapActivity : AppCompatActivity() {
         setupFab()
         checkPermissions()
         setupMapInteraction()
+        initializeBitmaps()
 
         // Load initial floor
         loadFloorPlan(currentFloor)
@@ -230,7 +248,7 @@ class MapActivity : AppCompatActivity() {
 
 
     private fun drawMarkerOnMap() {
-        val originalBitmap: Bitmap = when {
+        originalBitmap = when {
             modifiedFloorPlans.containsKey(currentFloor) -> {
                 modifiedFloorPlans[currentFloor]!!.copy(Bitmap.Config.ARGB_8888, true)
             }
@@ -243,7 +261,7 @@ class MapActivity : AppCompatActivity() {
             }
         }
 
-        val canvas = Canvas(originalBitmap)
+        canvas = Canvas(originalBitmap)
         canvas.drawCircle(bitmapX.toFloat(), bitmapY.toFloat(), markerRadius, paint)
 
         baseBitmap = originalBitmap
@@ -255,18 +273,6 @@ class MapActivity : AppCompatActivity() {
     }
 
 
-
-
-
-
-    // NEW: Helper function to get current floor image (modified or original)
-    private fun getCurrentFloorImage(floorName: String): ImageSource {
-        return if (modifiedFloorPlans.containsKey(floorName)) {
-            ImageSource.bitmap(modifiedFloorPlans[floorName]!!)
-        } else {
-            ImageSource.resource(floorPlans[floorName] ?: R.drawable.ground_floor)
-        }
-    }
 
     // NEW: Function to clear markers from current floor
     private fun clearMarkersFromCurrentFloor() {
@@ -424,9 +430,24 @@ class MapActivity : AppCompatActivity() {
 
     private fun loadFloorPlan(floorName: String) {
         try {
+            currentFloor=floorName
+            initializeBitmaps()
             // MODIFIED: Use the helper function to get the appropriate image source
+            if (modifiedFloorPlans.containsKey(floorName)){
+                mapImageView.setImage(ImageSource.bitmap(baseBitmap))
+            } else {
+                val resourceId = floorPlans[floorName] ?: run {
+                    Toast.makeText(this, "Floor plan not available", Toast.LENGTH_SHORT).show()
+                    return
+                }
 
-            mapImageView.setImage(getCurrentFloorImage(floorName))
+                mapImageView.setImage(ImageSource.resource(resourceId))
+
+
+
+
+
+            }
 
 
             // Configure the scale settings
