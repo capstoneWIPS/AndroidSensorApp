@@ -112,8 +112,8 @@ class MapActivity : AppCompatActivity() {
         "Floor Two" to R.drawable.second_floor,
         "Floor Three" to R.drawable.third_floor,
         "Floor Four" to R.drawable.fourth_floor,
-        "Floor Five" to R.drawable.fifth_floor,
-        "Floor Six" to R.drawable.sixth_floor
+        "Floor Five" to R.drawable.fifth_floor_new,
+        "Floor Six" to R.drawable.sixth_floor_new
     )
 
     private var currentFloor = "Ground Floor"
